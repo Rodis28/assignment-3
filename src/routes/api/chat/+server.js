@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { Orchestrator } from '$lib/orchestrators/ExampleJoySadOrchestrator.js';
+import { PhilosopherSkepticHelperOrchestrator } from '$lib/orchestrators/PhilosopherSkepticHelperOrchestrator.js';
 
 /**
  * Handle chat POST requests for a single-turn pipeline execution.
@@ -16,7 +16,7 @@ export async function POST({ request }) {
   }
 
   try {
-    const orchestrator = new Orchestrator();
+    const orchestrator = new PhilosopherSkepticHelperOrchestrator();
     const contents = history.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }));
     
     const { assistantMessage, frameSet, agent, reasons } = await orchestrator.orchestrate(contents);

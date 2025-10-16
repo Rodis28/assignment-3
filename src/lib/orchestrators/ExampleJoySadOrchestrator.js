@@ -1,39 +1,41 @@
 // Orchestrator: single-prompt agent selection → agent respond
 
-import { geminiGenerate } from '../gemini.js';
-import { JoyAgent } from '../agents/ExampleJoyAgent.js';
-import { SadAgent } from '../agents/ExampleSadAgent.js';
+import { geminiGenerate } from "../gemini.js";
+import { PhilosopherAgent } from "../agents/philosoher.js";
+import { SkepticAgent } from "../agents/skeptic.js";
+import { HelperAgent } from "../agents/helper.js";
 
 const SELECTION_SCHEMA = {
-  type: 'OBJECT',
+  type: "OBJECT",
   properties: {
-    agent: { type: 'STRING' },
-    reasons: { type: 'STRING' }
+    agent: { type: "STRING" },
+    reasons: { type: "STRING" },
   },
-  required: ['agent']
+  required: ["agent"],
 };
 export class Orchestrator {
   constructor() {
-    this.name = 'joy_sad';
+    this.name = "philosopher_skeptic_helper_router";
     this.agentByName = {
-      joy: new JoyAgent(),
-      sad: new SadAgent()
+      philosopher: new PhilosopherAgent(),
+      skeptic: new SkepticAgent(),
+      helper: new HelperAgent(),
     };
   }
 
   async _respondWith(agentName, contents) {
-    const agent = this.agentByName[agentName] || this.agentByName.joy;
+    const agent = this.agentByName[agentName] || this.agentByName.helper;
     const res = await agent.respond(contents);
-    return res?.text || '';
+    return res?.text || "";
   }
 
   async orchestrate(contents) {
-    const orchestratorPrompt = `Your job is to choose which emotional agents should respond to the user right now.
+    const orchestratorPrompt = `Choose exactly ONE agent to respond now.
         Think in two steps:
-        1) What emotions would best connect with the user right now, and what do they need (e.g., reassurance, validation, encouragement, caution)? Prioritize the latest user message while considering prior user messages with light recency weighting.
-        2) Pick the agent whose voice best matches that need.
+        1) What does the user need most (meaning, truth-testing, or practical steps)?
+        2) Pick the matching agent.
 
-        Available agents: "joy", "sad". ONLY USE ONE OF THESE AGENTS.
+        Available agents: "philosopher", "skeptic", "helper". ONLY USE ONE OF THESE AGENTS.
 
         Constraints:
         - Speak only through structured output. No extra text.
@@ -42,30 +44,33 @@ export class Orchestrator {
 
         Output strictly as JSON:
         {
-          "agent": "joy",
-          "reasons": "User celebrated good news; needs warm encouragement"
+          "agent": "helper",
+          "reasons": "User asked for actionable steps after sharing stress"
         }`;
 
     const result = await geminiGenerate({
       contents,
       systemPrompt: orchestratorPrompt,
-      config: { responseMimeType: 'application/json', responseSchema: SELECTION_SCHEMA }
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: SELECTION_SCHEMA,
+      },
     });
 
-    let agent = 'joy';
-    let reasons = 'Defaulted to joy';
-    
+    let agent = "helper";
+    let reasons = "Defaulted to helper";
+
     try {
-      const parsed = JSON.parse(result.text || '{}');
-      agent = parsed?.agent;
+      const parsed = JSON.parse(result.text || "{}");
+      if (parsed?.agent && this.agentByName[parsed.agent]) agent = parsed.agent;
       if (parsed?.reasons) reasons = String(parsed.reasons);
     } catch (_) {}
 
     const text = await this._respondWith(agent, contents);
 
-    const frameSet = { frames: { persona: { value: agent, rationale: [reasons] } } };
-    return { assistantMessage: text || '', frameSet, agent, reasons };
+    const frameSet = {
+      frames: { persona: { value: agent, rationale: [reasons] } },
+    };
+    return { assistantMessage: text || "", frameSet, agent, reasons };
   }
 }
-
-
